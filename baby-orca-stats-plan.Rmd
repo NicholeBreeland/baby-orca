@@ -2,29 +2,1346 @@
 title: "Baby ORCA Stats"
 author: "Nichole Breeland"
 date: "13/06/2020"
-output: pdf_document
+output: html_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
+```{r packages, include = FALSE}
+library(car)
+library(e1071)
+library(MASS)
+library(ggplot2)
+library(ppcor)
+library(ltm)
+```
+```{r dataset import and set up, include = FALSE}
+#Dataset with all IJA and cooperative ability measures
+all.data = read.csv("ORCA_IJA_CAAT.csv", stringsAsFactors = FALSE)
+#Change missing numerical identifier to NA (missing for R)
+all.data[all.data == 999] <- NA
+all.data[all.data == 9999] <- NA
+all.data[all.data == 888] <- NA
+all.data[all.data == 8888] <- NA
+options(scipen = 999) #turns off scientific notation
+```
+  
+## Notes:
+This code is stored on GitHub at https://github.com/NicholeBreeland/baby-orca
 
-## R Markdown
+## Main findings
+  
+* IJA book task (outliers replaced) may be associated with affiliative behaviour on the parallel roles task at 14 months  
+*p = .06, r = .15*
+* IJA book task (outliers replaced) may be associated with affiliative behaviour on the complementary roles task at 14 months  
+*p = .08 r = .15*
+* IJA ring task at associated with latency to success on the individual roles task at 14 months  
+*p = .02, Rs = .24 (when controlling for gender Rs = .21, p = .03)*
+* IJA book task may be associated with with spatial coordination on the individual roles task at 14 months  
+*Rs = .14, p = .08*
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+  
+  
+```{r data subset creation}
+#Main data set for ORCA all study in group
+#Exclusions only if diagnosis or language not 70% eng
+P3.data <- all.data[which(all.data$Study_inout == 1),]
+```
+  
+  
+```{r outlier management, include = FALSE}
+#### Outlier management
+## IJA book ##
+# M = .48, SD = .44
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+# 3 SD's = 1.32
+.44*3
 
-```{r cars}
-summary(cars)
+#Anything greater than 1.80 is an outlier
+.48+1.32
+
+#And should be replaced with next highest value 1.6666667
+#sort(P3.data$book_IJAsum_prop_incl_extIJA_P3)
+P3.data$book_IJAsum_prop_incl_extIJA_P3.or <- P3.data$book_IJAsum_prop_incl_extIJA_P3
+P3.data$book_IJAsum_prop_incl_extIJA_P3.or[P3.data$book_IJAsum_prop_incl_extIJA_P3.or >= 1.80] <- 1.6666667
+
+## IJA ring ##
+# M = 1.63, SD = 1.54
+
+# 3 SD's = 4.62
+1.54*3
+
+#Anything greater than 6.25 is an outlier
+1.63+4.62
+
+#And should be replaced with next highest value of 6
+#sort(P3.data$ring_IJAsum_incl_extIJA_nocrit_P3)
+#Outlier replacement
+P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or <- P3.data$ring_IJAsum_incl_extIJA_nocrit_P3
+P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or[P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or >= 6.25] <- 6
+
+
+## IT Latency ##
+# M = 19.34, SD = 13.62
+
+# 3 SD's = 40.86
+13.62*3
+
+#Anything greater than 60.2 is an outlier
+19.34+40.86
+
+#And should be replaced by the next highest value of 55.68
+
+#sort(P3.data$Avg_Lat_IT_P3, decreasing = FALSE)
+# above will run large table of values - to enable remove '#' 
+
+#Outlier replacement
+P3.data$Avg_Lat_IT_P3[P3.data$Avg_Lat_IT_P3 >= 60.2] <- 55.68
+
+## PR Latency ##
+# M = 18.83, SD = 12.64
+
+# 3 SD's = 37.92
+12.64*3
+
+#Anything greater than 56.75 is an outlier
+18.83+37.92
+
+#And should be replaced by the next highest value of 56.20
+
+#sort(P3.data$Avg_Lat_PR_P3, decreasing = FALSE)
+# above will run large table of values - to enable remove '#' 
+
+#Outlier replacement
+P3.data$Avg_Lat_PR_P3[P3.data$Avg_Lat_PR_P3 >= 56.75] <- 56.20
+
+## FT Latency 1 ##
+# M = 5.92, SD = 4.82
+
+# 3 SD's = 14.46
+4.82*3
+
+#Anything greater than 20.38 is an outlier
+5.92+14.46
+
+# NO OUTLIERS 
+range(P3.data$Avg_LAT1_FT_P3, na.rm = TRUE)
+
+## FT Latency 2 ##
+# M = 12.17, SD = 10.87
+
+# 3 SD's = 32.61
+10.87*3
+
+#Anything greater than 44.78 is an outlier
+12.17+32.61
+
+#And should be replaced by the next highest value of 41.72
+
+#sort(P3.data$Avg_LAT2_FT_P3, decreasing = FALSE) 
+# above will run large table of values - to enable remove '#' 
+
+#Outlier replacement
+P3.data$Avg_LAT2_FT_P3[P3.data$Avg_LAT2_FT_P3 >= 44.78] <- 41.72
+```
+  
+
+```{r affiliative antagonistic behaviour recoding - all tasks, include = FALSE}
+## Variable recoding
+
+#IT affiliation
+P3.data$IT_Afill_Cat[P3.data$IT_Afill_Final <= 1] <- 0
+P3.data$IT_Afill_Cat[P3.data$IT_Afill_Final > 1 ] <- 1
+
+#IT affiliation label for table
+P3.data$IT_Afill_Cat_label[P3.data$IT_Afill_Cat == 0] <- "IT No Afill"
+P3.data$IT_Afill_Cat_label[P3.data$IT_Afill_Cat == 1] <- "IT Some Afill"
+
+#IT affiliation
+P3.data$IT_Antag_Cat[P3.data$IT_Antag_Final <= 1] <- 0
+P3.data$IT_Antag_Cat[P3.data$IT_Antag_Final > 1 ] <- 1
+
+#IT affiliation label for table
+P3.data$IT_Antag_Cat_label[P3.data$IT_Antag_Cat == 0] <- "IT No Antag"
+P3.data$IT_Antag_Cat_label[P3.data$IT_Antag_Cat == 1] <- "IT Some Antag"
+
+#PR affiliation
+P3.data$PR_Afill_Cat[P3.data$PR_Afill_Final <= 1] <- 0
+P3.data$PR_Afill_Cat[P3.data$PR_Afill_Final > 1 ] <- 1
+
+#PR affiliation label for table
+P3.data$PR_Afill_Cat_label[P3.data$PR_Afill_Cat == 0] <- "PR No Afill"
+P3.data$PR_Afill_Cat_label[P3.data$PR_Afill_Cat == 1] <- "PR Some Afill"
+
+#PR affiliation
+P3.data$PR_Antag_Cat[P3.data$PR_Antag_Final <= 1] <- 0
+P3.data$PR_Antag_Cat[P3.data$PR_Antag_Final > 1 ] <- 1
+
+#PR affiliation label for table
+P3.data$PR_Antag_Cat_label[P3.data$PR_Antag_Cat == 0] <- "PR No Antag"
+P3.data$PR_Antag_Cat_label[P3.data$PR_Antag_Cat == 1] <- "PR Some Antag"
+
+#CR affiliation
+P3.data$CR_Afill_Cat[P3.data$CR_Afill_Final <= 1] <- 0
+P3.data$CR_Afill_Cat[P3.data$CR_Afill_Final > 1 ] <- 1
+
+#CR affiliation label for table
+P3.data$CR_Afill_Cat_label[P3.data$CR_Afill_Cat == 0] <- "CR No Afill"
+P3.data$CR_Afill_Cat_label[P3.data$CR_Afill_Cat == 1] <- "CR Some Afill"
+
+#CR affiliation
+P3.data$CR_Antag_Cat[P3.data$CR_Antag_Final <= 1] <- 0
+P3.data$CR_Antag_Cat[P3.data$CR_Antag_Final > 1 ] <- 1
+
+#CR affiliation label for table
+P3.data$CR_Antag_Cat_label[P3.data$CR_Antag_Cat == 0] <- "CR No Antag"
+P3.data$CR_Antag_Cat_label[P3.data$CR_Antag_Cat == 1] <- "CR Some Antag"
+```
+  
+## Primary research questions & results
+
+**Cooperative understanding:**
+  
+Is IJA book task at 14 months correlated with cooperative understanding (anticipation task) at 14 months? **NO** 
+
+```{r IJA Book and Coop Understand}
+
+book.cu.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$P3_TOTAL_avpredblockoutoftrials, method = 'spearman')
+book.cu.cor
+
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+Is IJA ring task at 14 months correlated with cooperative understanding (anticipation task) at 14 months? **NO**  
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r IJA Ring and Coop Understand}
+ring.cu.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$P3_TOTAL_avpredblockoutoftrials, method = 'spearman')
+ring.cu.cor
+```
+  
+## Cooperative action
+  
+*Note.* Biserial correlations (calculated via pearson method in R) are utilized when one variable is binary. If at least one variable is ordinal, spearman correlations are conducted. Partial correlations are conducted for tests involving IT Success (gender), IT Latency (gender), PR spatial coordination (gender), FT Latency 2 (age), IT antagonistic (gender).
+  
+Parallel roles:  
+
+Is IJA book task at 14 months correlated with success on the parallel roles task at 14 months? **NO**  
+
+```{r IJA book PRT succ}
+book.prt.succ.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_Succ_PR_P3, method = 'spearman')
+book.prt.succ.cor
+```
+  
+Is IJA ring task at 14 months correlated with success on the parallel roles task at 14 months? **NO**  
+  
+```{r IJA ring PRT succ}
+ring.prt.succ.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_Succ_PR_P3, method = 'spearman')
+ring.prt.succ.cor
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+Is IJA book task at 14 months correlated with latency to success on the parallel roles task at 14 months? **NO**
+
+```{r IJA book PRT lat}
+book.prt.lat.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_Lat_PR_P3, method = 'spearman')
+book.prt.lat.cor
+```
+  
+Is IJA ring task at 14 months correlated with latency to success on the parallel roles task at 14 months? **NO**
+
+```{r IJA ring PRT lat}
+ring.prt.lat.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_Lat_PR_P3, method = 'spearman')
+ring.prt.lat.cor
+```
+
+
+Is IJA book task at 14 months correlated with spatial coordination on the parallel roles task at 14 months? **NO**
+  
+```{r IJA book PRT sc}
+book.prt.sc.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_SC_PR_P3, method = 'spearman')
+book.prt.sc.cor
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df1 <- subset(P3.data, select = c ("book_IJAsum_prop_incl_extIJA_P3",
+                                   "Gender",
+                                   "Avg_SC_PR_P3"))
+df1 <- na.omit(df1)
+
+#part corr
+book.prt.sc.cor.part <- spcor.test(x = df1$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = df1$Avg_SC_PR_P3, z = df1$Gender, method = 'spearman')
+book.prt.sc.cor.part
+```
+  
+Is IJA ring task at 14 months correlated with spatial coordination on the parallel roles task at 14 months? **NO**
+  
+```{r IJA ring PRT sc}
+ring.prt.sc.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_SC_PR_P3, method = 'spearman')
+ring.prt.sc.cor
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df2 <- subset(P3.data, select = c ("ring_IJAsum_incl_extIJA_nocrit_P3",
+                                   "Gender",
+                                   "Avg_SC_PR_P3"))
+df2 <- na.omit(df2)
+
+#part corr
+ring.prt.sc.cor.part <- spcor.test(x = df2$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = df2$Avg_SC_PR_P3, z = df2$Gender, method = 'spearman')
+ring.prt.sc.cor.part
+```
+  
+Complementary roles:
+  
+Is IJA book task at 14 months correlated with success on the complementary roles task at 14 months? **NO**
+
+```{r IJA book CRT succ}
+book.crt.succ.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_Succ_FT_P3, method = 'spearman')
+book.crt.succ.cor
+```
+  
+Is IJA ring task at 14 months correlated with success on the complementary roles task at 14 months? **NO**
+
+```{r IJA ring CRT succ}
+ring.crt.succ.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_Succ_FT_P3, method = 'spearman')
+ring.crt.succ.cor
+```
+  
+Is IJA book task at 14 months correlated with latency to success on the complementary roles task at 14 months? **NO**
+
+```{r IJA book FT lat}
+
+#Latency Action 1
+book.crt.lat1.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_LAT1_FT_P3, method = 'spearman')
+book.crt.lat1.cor
+
+#Latency Action 2
+book.crt.lat2.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_LAT2_FT_P3, method = 'spearman')
+book.crt.lat2.cor
+
+#Part correlation to control for age
+#dataframe with NA's removed
+df11 <- subset(P3.data, select = c ("book_IJAsum_prop_incl_extIJA_P3",
+                                   "P3_Age",
+                                   "Avg_LAT2_FT_P3"))
+df11 <- na.omit(df11)
+
+#part corr
+book.crt.lat2.cor.part <- spcor.test(x = df11$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = df11$Avg_LAT2_FT_P3, z = df11$P3_Age, method = 'spearman')
+book.crt.lat2.cor.part
+```
+  
+Is IJA ring task at 14 months correlated with latency to success on the complementary roles task at 14 months? **NO**
+
+```{r IJA ring FT lat}
+#Latency Action 1
+ring.crt.lat1.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_LAT1_FT_P3, method = 'spearman')
+ring.crt.lat1.cor
+
+#Latency Action 2
+ring.crt.lat2.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_LAT2_FT_P3, method = 'spearman')
+ring.crt.lat2.cor
+
+#Part correlation to control for age
+#dataframe with NA's removed
+df12 <- subset(P3.data, select = c ("ring_IJAsum_incl_extIJA_nocrit_P3",
+                                   "P3_Age",
+                                   "Avg_LAT2_FT_P3"))
+df12 <- na.omit(df12)
+
+#part corr
+ring.crt.lat2.cor.part <- spcor.test(x = df12$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = df12$Avg_LAT2_FT_P3, z = df12$P3_Age, method = 'spearman')
+ring.crt.lat2.cor.part
+```
+  
+Is IJA book task at 14 months correlated with spatial coordination on the complementary roles task at 14 months? **NO**
+
+```{r IJA book CRT sc}
+book.crt.sc.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_SC_FT_P3, method = 'spearman')
+book.crt.sc.cor
+```
+  
+Is IJA ring task at 14 months correlated with spatial coordination on the complementary roles task at 14 months? **NO**
+
+```{r IJA ring CRT sc}
+ring.crt.sc.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_SC_FT_P3, method = 'spearman')
+ring.crt.sc.cor
+```
+  
+# Social context:
+  
+Parallel roles:
+  
+Is IJA book task at 14 months correlated with affiliative behaviour on the parallel roles task at 14 months? **NO, p = .06**
+
+```{r IJA book PR afill}
+#Point-Biserial Correlation WITH OUTLIERS
+book.prt.afill.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$PR_Afill_Cat, method = 'pearson')
+book.prt.afill.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+book.prt.afill.cor.OR <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3.or, 
+                       y = P3.data$PR_Afill_Cat, method = 'pearson')
+book.prt.afill.cor.OR
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df9 <- subset(P3.data, select = c ("book_IJAsum_prop_incl_extIJA_P3",
+                                   "book_IJAsum_prop_incl_extIJA_P3.or",
+                                   "Gender",
+                                   "PR_Afill_Cat"))
+df9 <- na.omit(df9)
+
+#part corr - outliers present
+book.prt.afill.cor.part <- spcor.test(x = df9$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = df9$PR_Afill_Cat, z = df9$Gender, method = 'pearson')
+book.prt.afill.cor.part
+
+#part corr - outliers replaced
+book.prt.afill.cor.part.or <- spcor.test(x = df9$book_IJAsum_prop_incl_extIJA_P3.or, 
+                       y = df9$PR_Afill_Cat, z = df9$Gender, method = 'pearson')
+book.prt.afill.cor.part.or
+```
+
+  
+Is IJA ring task at 14 months correlated with affiliative behaviour on the parallel roles task at 14 months? **NO**
+
+```{r IJA ring PR afill}
+#Point-Biserial Correlation WITH OUTLIERS
+ring.prt.afill.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$PR_Afill_Cat, method = 'pearson')
+ring.prt.afill.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+ring.prt.afill.cor.OR <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or, 
+                       y = P3.data$PR_Afill_Cat, method = 'pearson')
+ring.prt.afill.cor.OR
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df10 <- subset(P3.data, select = c ("ring_IJAsum_incl_extIJA_nocrit_P3",
+                                   "ring_IJAsum_incl_extIJA_nocrit_P3.or",
+                                   "Gender",
+                                   "PR_Afill_Cat"))
+df10 <- na.omit(df10)
+
+#part corr - outliers present
+ring.prt.afill.cor.part <- spcor.test(x = df10$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = df10$PR_Afill_Cat, z = df10$Gender, method = 'pearson')
+ring.prt.afill.cor.part
+
+#part corr - outliers replaced
+ring.prt.afill.cor.part.or <- spcor.test(x = df10$ring_IJAsum_incl_extIJA_nocrit_P3.or, 
+                       y = df10$PR_Afill_Cat, z = df10$Gender, method = 'pearson')
+ring.prt.afill.cor.part.or
+
+```
+  
+Is IJA book task at 14 months correlated with antagonistic behaviour on the parallel roles task at 14 months? **NO**
+
+```{r IJA book PR antag}
+#Point-Biserial Correlation WITH OUTLIERS
+book.prt.antag.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$PR_Antag_Cat, method = 'pearson')
+book.prt.antag.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+book.prt.antag.cor.OR <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3.or, 
+                       y = P3.data$PR_Antag_Cat, method = 'pearson')
+book.prt.antag.cor.OR
+```
+  
+Is IJA ring task at 14 months correlated with antagonistic behaviour on the parallel roles task at 14 months? **NO**
+
+```{r IJA ring PR antag}
+#Point-Biserial Correlation WITH OUTLIERS
+ring.prt.antag.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$PR_Antag_Cat, method = 'pearson')
+ring.prt.antag.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+ring.prt.antag.cor.OR <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or, 
+                       y = P3.data$PR_Antag_Cat, method = 'pearson')
+ring.prt.antag.cor.OR
+```
+  
+Complementary roles:
+  
+Is IJA book task at 14 months correlated with affiliative behaviour on the complementary roles task at 14 months? **NO, p = .06**
+
+```{r IJA book CR afill}
+#Point-Biserial Correlation WITH OUTLIERS
+book.crt.afill.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$CR_Afill_Cat, method = 'pearson')
+book.crt.afill.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+book.crt.afill.cor.OR <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3.or, 
+                       y = P3.data$CR_Afill_Cat, method = 'pearson')
+book.crt.afill.cor.OR
+```
+  
+Is IJA ring task at 14 months correlated with affiliative behaviour on the complementary roles task at 14 months? **NO**
+
+```{r IJA ring CR afill}
+#Point-Biserial Correlation WITH OUTLIERS
+ring.crt.afill.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$CR_Afill_Cat, method = 'pearson')
+ring.crt.afill.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+ring.crt.afill.cor.OR <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or, 
+                       y = P3.data$CR_Afill_Cat, method = 'pearson')
+ring.crt.afill.cor.OR
+```
+  
+Is IJA book task at 14 months correlated with antagonistic behaviour on the complementary roles task at 14 months? **NO**
+
+```{r IJA book CR antag}
+#Point-Biserial Correlation WITH OUTLIERS
+book.crt.antag.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$CR_Antag_Cat, method = 'pearson')
+book.crt.antag.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+book.crt.antag.cor.OR <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3.or, 
+                       y = P3.data$CR_Antag_Cat, method = 'pearson')
+book.crt.antag.cor.OR
+```
+  
+Is IJA ring task at 14 months correlated with antagonistic behaviour on the complementary roles task at 14 months? **NO**
+
+```{r IJA ring CR antag}
+#Point-Biserial Correlation WITH OUTLIERS
+ring.crt.antag.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$CR_Antag_Cat, method = 'pearson')
+ring.crt.antag.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+ring.crt.antag.cor.OR <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or, 
+                       y = P3.data$CR_Antag_Cat, method = 'pearson')
+ring.crt.antag.cor.OR
+```
+  
+## Follow up stats & stats for supplementary materials:
+  
+Individual roles:
+  
+Is IJA book task at 14 months correlated with success on the individual roles task at 14 months? **NO**
+
+```{r IJA book IT succ}
+book.irt.succ.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_Succ_IT_P3, method = 'spearman')
+book.irt.succ.cor
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df3 <- subset(P3.data, select = c ("book_IJAsum_prop_incl_extIJA_P3",
+                                   "Gender",
+                                   "Avg_Succ_IT_P3"))
+df3 <- na.omit(df3)
+
+#part corr
+book.irt.succ.cor.part <- spcor.test(x = df3$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = df3$Avg_Succ_IT_P3, z = df3$Gender, method = 'spearman')
+book.irt.succ.cor.part
+```
+  
+Is IJA ring task at 14 months correlated with success on the individual roles task at 14 months? **NO**
+  
+```{r IJA ring IT succ}
+ring.irt.succ.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_Succ_IT_P3, method = 'spearman')
+ring.irt.succ.cor
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df4 <- subset(P3.data, select = c ("ring_IJAsum_incl_extIJA_nocrit_P3",
+                                   "Gender",
+                                   "Avg_Succ_IT_P3"))
+df4 <- na.omit(df4)
+
+#part corr
+ring.irt.succ.cor.part <- spcor.test(x = df4$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = df4$Avg_Succ_IT_P3, z = df4$Gender, method = 'spearman')
+ring.irt.succ.cor.part
+```
+  
+Is IJA book task at 14 months correlated with latency to success on the individual roles task at 14 months? **NO**
+
+```{r IJA book IT lat}
+book.irt.lat.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_Lat_IT_P3, method = 'spearman')
+book.irt.lat.cor
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df5 <- subset(P3.data, select = c ("book_IJAsum_prop_incl_extIJA_P3",
+                                   "Gender",
+                                   "Avg_Lat_IT_P3"))
+df5 <- na.omit(df5)
+
+#part corr
+book.irt.lat.cor.part <- spcor.test(x = df5$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = df5$Avg_Lat_IT_P3, z = df5$Gender, method = 'spearman')
+book.irt.lat.cor.part
+```
+  
+Is IJA ring task at 14 months correlated with latency to success on the individual roles task at 14 months? **YES, Rs = .24, p = .02 (when controlling for gender Rs = .21, p = .03)**
+
+```{r IJA ring IT lat}
+ring.irt.lat.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_Lat_IT_P3, method = 'spearman')
+ring.irt.lat.cor
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df6 <- subset(P3.data, select = c ("ring_IJAsum_incl_extIJA_nocrit_P3",
+                                   "Gender",
+                                   "Avg_Lat_IT_P3"))
+df6 <- na.omit(df6)
+
+#part corr
+ring.irt.lat.cor.part <- spcor.test(x = df6$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = df6$Avg_Lat_IT_P3, z = df6$Gender, method = 'spearman')
+ring.irt.lat.cor.part
+```
+  
+Is IJA book task at 14 months correlated with spatial coordination on the individual roles task at 14 months? **NO, p = .08**
+
+```{r IJA book IT sc}
+book.irt.sc.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$Avg_SC_IT_P3, method = 'spearman')
+book.irt.sc.cor
+```
+  
+Is IJA ring task at 14 months correlated with spatial coordination on the individual roles task at 14 months? **NO**
+
+```{r IJA ring IT sc}
+ring.irt.sc.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$Avg_SC_IT_P3, method = 'spearman')
+ring.irt.sc.cor
+```
+  
+Individual roles:
+  
+Is IJA book task at 14 months correlated with affiliative behaviour on the individual roles task at 14 months? **NO**
+
+```{r IJA book IT afill}
+#Point-Biserial Correlation WITH OUTLIERS
+book.irt.afill.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$IT_Afill_Cat, method = 'pearson')
+book.irt.afill.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+book.irt.afill.cor.OR <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3.or, 
+                       y = P3.data$IT_Afill_Cat, method = 'pearson')
+book.irt.afill.cor.OR
+```
+  
+Is IJA ring task at 14 months correlated with affiliative behaviour on the individual roles task at 14 months? **NO**
+
+```{r IJA ring IT afill}
+#Point-Biserial Correlation WITH OUTLIERS
+ring.irt.afill.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$IT_Afill_Cat, method = 'pearson')
+ring.irt.afill.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+ring.irt.afill.cor.OR <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or, 
+                       y = P3.data$IT_Afill_Cat, method = 'pearson')
+ring.irt.afill.cor.OR
+```
+  
+Is IJA book task at 14 months correlated with antagonistic behaviour on the individual roles task at 14 months? **NO**
+
+```{r IJA book IT antag}
+#Point-Biserial Correlation WITH OUTLIERS
+book.irt.antag.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$IT_Antag_Cat, method = 'pearson')
+book.irt.antag.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+book.irt.antag.cor.OR <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3.or, 
+                       y = P3.data$IT_Antag_Cat, method = 'pearson')
+book.irt.antag.cor.OR
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df7 <- subset(P3.data, select = c ("book_IJAsum_prop_incl_extIJA_P3",
+                                   "Gender",
+                                   "IT_Antag_Cat"))
+df7 <- na.omit(df7)
+
+#part corr
+book.irt.antag.cor.part <- spcor.test(x = df7$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = df7$IT_Antag_Cat, z = df7$Gender, method = 'pearson')
+book.irt.antag.cor.part
+```
+  
+Is IJA ring task at 14 months correlated with antagonistic behaviour on the individual roles task at 14 months? **NO**
+  
+```{r IJA ring IT antag}
+#Point-Biserial Correlation WITH OUTLIERS
+ring.irt.antag.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$IT_Antag_Cat, method = 'pearson')
+ring.irt.antag.cor
+
+#Point-Biserial Correlation OUTLIERS REPLACED
+ring.irt.antag.cor.OR <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3.or, 
+                       y = P3.data$IT_Antag_Cat, method = 'pearson')
+ring.irt.antag.cor.OR
+
+#Part correlation to control for Gender
+#dataframe with NA's removed
+df8 <- subset(P3.data, select = c ("ring_IJAsum_incl_extIJA_nocrit_P3",
+                                   "Gender",
+                                   "IT_Antag_Cat"))
+df8 <- na.omit(df8)
+
+#part corr
+ring.irt.antag.cor.part <- spcor.test(x = df8$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = df8$IT_Antag_Cat, z = df8$Gender, method = 'pearson')
+ring.irt.antag.cor.part
+```
+
+
+  
+## Variables and Descriptives
+### Initiating Joint Attention (IJA)
+  
+IJA book (proportion) (variable name: book_IJAsum_prop_incl_extIJA_P3)  
+```{r IJA book descriptives}
+#Histogram 
+with(P3.data, hist(book_IJAsum_prop_incl_extIJA_P3,breaks = 10,
+                               xlab = "IJA book proportions",
+                               main = "IJA book scores \n distribution"))
+#Skewness test
+skewness(P3.data$book_IJAsum_prop_incl_extIJA_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$book_IJAsum_prop_incl_extIJA_P3)
+#Mean
+mean(P3.data$book_IJAsum_prop_incl_extIJA_P3, na.rm = TRUE)
+#SD
+sd(P3.data$book_IJAsum_prop_incl_extIJA_P3, na.rm = TRUE)
+#Range
+range(P3.data$book_IJAsum_prop_incl_extIJA_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$book_IJAsum_prop_incl_extIJA_P3)) 
+
+#Variable correlated with age? NO
+ija.book.age.cor <- cor.test(x = P3.data$book_IJAsum_prop_incl_extIJA_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+ija.book.age.cor 
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=book_IJAsum_prop_incl_extIJA_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(book_IJAsum_prop_incl_extIJA_P3 ~ Gender, data = P3.data)
+```
+
+  
+IJA ring (frequency) (variable name: ring_IJAsum_incl_extIJA_nocrit_P3)  
+  
+```{r IJA ring descriptives}
+#Histogram 
+with(P3.data, hist(ring_IJAsum_incl_extIJA_nocrit_P3,breaks = 10,
+                               xlab = "IJA ring frequency",
+                               main = "IJA ring scores \n distribution"))
+#Skewness test
+skewness(P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$ring_IJAsum_incl_extIJA_nocrit_P3)
+#Mean
+mean(P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, na.rm = TRUE)
+#SD
+sd(P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, na.rm = TRUE)
+#Range
+range(P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$ring_IJAsum_incl_extIJA_nocrit_P3)) 
+
+#Variable correlated with age? NO
+ija.ring.age.cor <- cor.test(x = P3.data$ring_IJAsum_incl_extIJA_nocrit_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+ija.ring.age.cor 
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=ring_IJAsum_incl_extIJA_nocrit_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(ring_IJAsum_incl_extIJA_nocrit_P3 ~ Gender, data = P3.data)
+```
+  
+### Cooperative understanding
+  
+Anticipation score (variable name: P3_TOTAL_avpredblockoutoftrials)
+  
+```{r anticipation descriptives}
+#Histogram 
+with(P3.data, hist(P3_TOTAL_avpredblockoutoftrials,breaks = 10,
+                               xlab = "Average anticipation",
+                               main = "Cooperative Understanding \n scores distribution"))
+#Skewness test
+skewness(P3.data$P3_TOTAL_avpredblockoutoftrials, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$P3_TOTAL_avpredblockoutoftrials)
+#Mean
+mean(P3.data$P3_TOTAL_avpredblockoutoftrials, na.rm = TRUE)
+#SD
+sd(P3.data$P3_TOTAL_avpredblockoutoftrials, na.rm = TRUE)
+#Range
+range(P3.data$P3_TOTAL_avpredblockoutoftrials, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$P3_TOTAL_avpredblockoutoftrials)) 
+
+#Variable correlated with age? NO
+anti.age.cor <- cor.test(x = P3.data$P3_TOTAL_avpredblockoutoftrials, 
+                       y = P3.data$P3_Age, method = 'spearman')
+anti.age.cor 
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=P3_TOTAL_avpredblockoutoftrials)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(P3_TOTAL_avpredblockoutoftrials ~ Gender, data = P3.data)
+```
+  
+### Cooperative action
+  
+#### Individual roles task
+  
+Success (variable name: Avg_Succ_IT_P3)
+  
+```{r IT success descriptives}
+#Histogram 
+with(P3.data, hist(Avg_Succ_IT_P3,breaks = 10,
+                               xlab = "Average success",
+                               main = "Success IT \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_Succ_IT_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$Avg_Succ_IT_P3)
+#Mean
+mean(P3.data$Avg_Succ_IT_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_Succ_IT_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_Succ_IT_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_Succ_IT_P3)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$Avg_Succ_IT_P3)
+
+#Variable correlated with age? NO
+it.succ.age.cor <- cor.test(x = P3.data$Avg_Succ_IT_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+it.succ.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_Succ_IT_P3)) + geom_point()
+
+#Gender differences for variable? YES
+wilcox.test(Avg_Succ_IT_P3 ~ Gender, data = P3.data)
+Boys_IT<- P3.data[which(P3.data$Gender == 1),]
+Girls_IT<- P3.data[which(P3.data$Gender == 2),]
+median(Boys_IT$Avg_Succ_IT_P3, na.rm = TRUE)
+median(Girls_IT$Avg_Succ_IT_P3, na.rm = TRUE)
+```
+  
+Latency to success (variable name: Avg_Lat_IT_P3)
+  
+```{r IT latency descriptives}
+#Histogram 
+with(P3.data, hist(Avg_Lat_IT_P3,breaks = 10,
+                               xlab = "Average latency",
+                               main = "latency IT \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_Lat_IT_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$Avg_Lat_IT_P3)
+#Mean
+mean(P3.data$Avg_Lat_IT_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_Lat_IT_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_Lat_IT_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_Lat_IT_P3)) 
+
+#Variable correlated with age? NO
+it.lat.age.cor <- cor.test(x = P3.data$Avg_Lat_IT_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+it.lat.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_Lat_IT_P3)) + geom_point()
+
+#Gender differences for variable? YES
+wilcox.test(Avg_Lat_IT_P3 ~ Gender, data = P3.data)
+Boys_IT<- P3.data[which(P3.data$Gender == 1),]
+Girls_IT<- P3.data[which(P3.data$Gender == 2),]
+median(Boys_IT$Avg_Lat_IT_P3, na.rm = TRUE)
+median(Girls_IT$Avg_Lat_IT_P3, na.rm = TRUE)
+```
+  
+Spatial coordination (variable name: Avg_SC_IT_P3)
+  
+```{r IT spatial coord descriptives}
+#Histogram 
+with(P3.data, hist(Avg_SC_IT_P3,breaks = 10,
+                               xlab = "Average spatial coord",
+                               main = "Spat coord IT \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_SC_IT_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$Avg_SC_IT_P3)
+#Mean
+mean(P3.data$Avg_SC_IT_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_SC_IT_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_SC_IT_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_SC_IT_P3)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$Avg_SC_IT_P3)
+
+#Variable correlated with age? NO
+it.sc.age.cor <- cor.test(x = P3.data$Avg_SC_IT_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+it.sc.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_SC_IT_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(Avg_SC_IT_P3 ~ Gender, data = P3.data)
+```
+  
+  
+#### Parallel roles task
+  
+Success (variable name: Avg_Succ_PR_P3)
+  
+```{r PR success descriptives}
+#Histogram 
+with(P3.data, hist(Avg_Succ_PR_P3,breaks = 10,
+                               xlab = "Average success",
+                               main = "Success PR \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_Succ_PR_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$Avg_Succ_PR_P3)
+#Mean
+mean(P3.data$Avg_Succ_PR_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_Succ_PR_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_Succ_PR_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_Succ_PR_P3)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$Avg_Succ_PR_P3)
+
+#Variable correlated with age? NO
+pr.succ.age.cor <- cor.test(x = P3.data$Avg_Succ_PR_P3, 
+                       y = P3.data$P3_Age, method = 'pearson')
+pr.succ.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_Succ_PR_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(Avg_Succ_PR_P3 ~ Gender, data = P3.data)
+```
+  
+Latency to success (variable name: Avg_Lat_PR_P3)
+  
+```{r PR latency descriptives}
+
+
+#Histogram 
+with(P3.data, hist(Avg_Lat_PR_P3,breaks = 10,
+                               xlab = "Average latency",
+                               main = "latency PR \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_Lat_PR_P3, na.rm = TRUE)
+#NormalPRy test 
+shapiro.test(P3.data$Avg_Lat_PR_P3)
+#Mean
+mean(P3.data$Avg_Lat_PR_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_Lat_PR_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_Lat_PR_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_Lat_PR_P3)) 
+
+#Variable correlated with age? NO
+pr.lat.age.cor <- cor.test(x = P3.data$Avg_Lat_PR_P3, 
+                       y = P3.data$P3_Age, method = 'pearson')
+pr.lat.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_Lat_PR_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(Avg_Lat_PR_P3 ~ Gender, data = P3.data)
+```
+  
+Spatial coordination (variable name: Avg_SC_PR_P3)
+  
+```{r PR spatial coord descriptives}
+#Histogram 
+with(P3.data, hist(Avg_SC_PR_P3,breaks = 10,
+                               xlab = "Average spatial coord",
+                               main = "Spat coord PR \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_SC_PR_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$Avg_SC_PR_P3)
+#Mean
+mean(P3.data$Avg_SC_PR_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_SC_PR_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_SC_PR_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_SC_PR_P3)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$Avg_SC_PR_P3)
+
+#Variable correlated with age? NO
+pr.sc.age.cor <- cor.test(x = P3.data$Avg_SC_PR_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+pr.sc.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_SC_PR_P3)) + geom_point()
+
+#Gender differences for variable? YES
+wilcox.test(Avg_SC_PR_P3 ~ Gender, data = P3.data)
+Boys_PR<- P3.data[which(P3.data$Gender == 1),]
+Girls_PR<- P3.data[which(P3.data$Gender == 2),]
+median(Boys_PR$Avg_SC_PR_P3, na.rm = TRUE)
+median(Girls_PR$Avg_SC_PR_P3, na.rm = TRUE)
+```
+  
+  
+#### Complementary roles task
+  
+Success (variable name: (variable name: Avg_Succ_FT_P3)
+  
+```{r FT success descriptives}
+#Histogram 
+with(P3.data, hist(Avg_Succ_FT_P3,breaks = 10,
+                               xlab = "Average success",
+                               main = "Success FT \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_Succ_FT_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$Avg_Succ_FT_P3)
+#Mean
+mean(P3.data$Avg_Succ_FT_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_Succ_FT_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_Succ_FT_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_Succ_FT_P3)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$Avg_Succ_FT_P3)
+
+#Variable correlated with age? NO
+ft.succ.age.cor <- cor.test(x = P3.data$Avg_Succ_FT_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+ft.succ.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_Succ_FT_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(Avg_Succ_FT_P3 ~ Gender, data = P3.data)
+```
+  
+Latency to success (variable name: Avg_LAT1_FT_P3, Avg_LAT2_FT_P3)
+  
+```{r FT latency descriptives}
+
+#### LATENCY ACTION 1 ####
+
+#Histogram 
+with(P3.data, hist(Avg_LAT1_FT_P3,breaks = 10,
+                               xlab = "Average latency",
+                               main = "latency FT \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_LAT1_FT_P3, na.rm = TRUE)
+#NormalFTy test 
+shapiro.test(P3.data$Avg_LAT1_FT_P3)
+#Mean
+mean(P3.data$Avg_LAT1_FT_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_LAT1_FT_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_LAT1_FT_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_LAT1_FT_P3)) 
+
+#Variable correlated with age? NO
+ft.lat1.age.cor <- cor.test(x = P3.data$Avg_LAT1_FT_P3, 
+                       y = P3.data$P3_Age, method = 'pearson')
+ft.lat1.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_LAT1_FT_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(Avg_LAT1_FT_P3 ~ Gender, data = P3.data)
+
+#### LATENCY ACTION 2 ####
+
+#Histogram 
+with(P3.data, hist(Avg_LAT2_FT_P3,breaks = 10,
+                               xlab = "Average latency",
+                               main = "latency FT \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_LAT2_FT_P3, na.rm = TRUE)
+#NormalFTy test 
+shapiro.test(P3.data$Avg_LAT2_FT_P3)
+#Mean
+mean(P3.data$Avg_LAT2_FT_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_LAT2_FT_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_LAT2_FT_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_LAT2_FT_P3)) 
+
+#Variable correlated with age? YES r = -.21*
+ft.lat2.age.cor <- cor.test(x = P3.data$Avg_LAT2_FT_P3, 
+                       y = P3.data$P3_Age, method = 'pearson')
+ft.lat2.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_LAT2_FT_P3)) + geom_point()
+
+#Gender differences for variable? NO
+wilcox.test(Avg_LAT2_FT_P3 ~ Gender, data = P3.data)
+```
+  
+Spatial coordination (variable name: Avg_SC_FT_P3)
+  
+```{r FT spatial coord descriptives}
+#Histogram 
+with(P3.data, hist(Avg_SC_FT_P3,breaks = 10,
+                               xlab = "Average spatial coord",
+                               main = "Spat coord FT \n task distribution"))
+#Skewness test
+skewness(P3.data$Avg_SC_FT_P3, na.rm = TRUE)
+#Normality test 
+shapiro.test(P3.data$Avg_SC_FT_P3)
+#Mean
+mean(P3.data$Avg_SC_FT_P3, na.rm = TRUE)
+#SD
+sd(P3.data$Avg_SC_FT_P3, na.rm = TRUE)
+#Range
+range(P3.data$Avg_SC_FT_P3, na.rm = TRUE)
+# of complete observations
+sum(!is.na(P3.data$Avg_SC_FT_P3)) 
+
+#Variable correlated with age? NO
+ft.sc.age.cor <- cor.test(x = P3.data$Avg_SC_FT_P3, 
+                       y = P3.data$P3_Age, method = 'spearman')
+ft.sc.age.cor
+
+#corr plot
+ggplot(P3.data, aes(x=P3_Age, y=Avg_SC_FT_P3)) + geom_point()
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$Avg_SC_FT_P3)
+
+#Gender differences for variable? NO
+wilcox.test(Avg_SC_FT_P3 ~ Gender, data = P3.data)
+```
+  
+  
+### Social Context
+
+#### Individual roles task
+  
+Affiliation (variable name: IT_Afill_Final)
+  
+```{r IT afill descriptives}
+#Histogram 
+with(P3.data, hist(IT_Afill_Cat,breaks = 2,
+                               xlab = "y/n affiliation",
+                               main = "Affiliation IT \n task distribution"))
+# of complete observations
+sum(!is.na(P3.data$IT_Afill_Cat)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$IT_Afill_Cat)
+
+#Variable associated with age? NO
+t.test(P3_Age ~ IT_Afill_Cat, data = P3.data, paired=FALSE)
+
+#Gender differences for variable? NO
+afill.it.tab <- table(P3.data$IT_Afill_Cat, P3.data$Gender)
+afill.it.tab
+#chi-square test 
+chisq.test(afill.it.tab)
+```
+  
+  
+Antagonistic (variable name: IT_Antag_Final)
+  
+```{r IT antag descriptives}
+#Histogram 
+with(P3.data, hist(IT_Antag_Cat,breaks = 2,
+                               xlab = "y/n antagonism",
+                               main = "Antagonism IT \n task distribution"))
+
+# of complete observations
+sum(!is.na(P3.data$IT_Antag_Cat)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$IT_Antag_Cat)
+
+#Variable correlated with age? NO
+t.test(P3_Age ~ IT_Antag_Cat, data = P3.data, paired=FALSE)
+
+#Gender differences for variable? YES - 1 = males, 2 = females
+antag.it.tab <- table(P3.data$IT_Antag_Cat, P3.data$Gender)
+antag.it.tab
+#chi-square test 
+chisq.test(antag.it.tab)
+```
+  
+#### Parallel roles task
+  
+Affiliation (variable name: PR_Afill_Final)
+  
+```{r PR afill descriptives}
+#Histogram 
+with(P3.data, hist(PR_Afill_Cat,breaks = 2,
+                               xlab = "y/n affiliation",
+                               main = "Affiliation PR \n task distribution"))
+# of complete observations
+sum(!is.na(P3.data$PR_Afill_Cat)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$PR_Afill_Cat)
+
+#Variable correlated with age? NO
+t.test(P3_Age ~ PR_Afill_Cat, data = P3.data, paired=FALSE)
+
+#Gender differences for variable? NO
+afill.pr.tab <- table(P3.data$PR_Afill_Cat, P3.data$Gender)
+afill.pr.tab
+#chi-square test 
+chisq.test(afill.pr.tab)
+```
+  
+  
+Antagonistic (variable name: PR_Antag_Final)
+  
+```{r PR antag descriptives}
+#Histogram 
+with(P3.data, hist(PR_Antag_Cat,breaks = 2,
+                               xlab = "y/n antagonism",
+                               main = "Antagonism PR \n task distribution"))
+# of complete observations
+sum(!is.na(P3.data$PR_Antag_Cat))
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$PR_Antag_Cat)
+
+#Variable correlated with age? NO
+t.test(P3_Age ~ PR_Antag_Cat, data = P3.data, paired=FALSE)
+
+#Gender differences for variable? NO
+antag.pr.tab <- table(P3.data$PR_Antag_Cat, P3.data$Gender)
+antag.pr.tab
+#chi-square test 
+chisq.test(antag.pr.tab)
+```
+  
+  
+#### Complementary roles task
+  
+Affiliation (variable name: CR_Afill_Final)
+  
+```{r CR afill descriptives}
+#Histogram 
+with(P3.data, hist(CR_Afill_Cat,breaks = 2,
+                               xlab = "y/n affiliation",
+                               main = "Affiliation CR \n task distribution"))
+# of complete observations
+sum(!is.na(P3.data$CR_Afill_Cat)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$CR_Afill_Cat)
+
+#Variable correlated with age? NO
+t.test(P3_Age ~ CR_Afill_Cat, data = P3.data, paired=FALSE)
+
+#Gender differences for variable? NO
+afill.cr.tab <- table(P3.data$CR_Afill_Cat, P3.data$Gender)
+afill.cr.tab
+#chi-square test 
+chisq.test(afill.cr.tab)
+```
+  
+  
+Antagonistic (variable name: CR_Antag_Final)
+  
+```{r CR antag descriptives}
+#Histogram 
+with(P3.data, hist(CR_Antag_Cat,breaks = 2,
+                               xlab = "y/n antagonism",
+                               main = "Antagonism CR \n task distribution"))
+# of complete observations
+sum(!is.na(P3.data$CR_Antag_Cat)) 
+
+#table of values - scores on top and frequency on bottom
+table(P3.data$CR_Antag_Cat)
+
+#Variable correlated with age? NO
+t.test(P3_Age ~ CR_Antag_Cat, data = P3.data, paired=FALSE)
+
+#Gender differences for variable? NO
+antag.cr.tab <- table(P3.data$CR_Antag_Cat, P3.data$Gender)
+antag.cr.tab
+#chi-square test 
+chisq.test(antag.cr.tab)
+```
+  
+
